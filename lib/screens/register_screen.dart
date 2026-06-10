@@ -114,7 +114,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<Gender>(
-                        value: gender,
+                        initialValue: gender,
                         dropdownColor: const Color(0xFF1E293B),
                         iconEnabledColor: const Color(0xFF64748B),
                         style: const TextStyle(color: Color(0xFFF8FAFC), fontSize: 15),
