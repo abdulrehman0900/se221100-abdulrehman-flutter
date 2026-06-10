@@ -35,3 +35,5 @@ Each post's `title` is shown as the **course title** and its `body` as the **des
 ## Branch Name
 
 **feature/course-api-integration**
+
+<img width="1919" height="1019" alt="Screenshot 2026-06-10 132241" src="https://github.com/user-attachments/assets/7090b417-6bf8-4221-86c2-a5dd3353902d" />
