@@ -1,7 +1,7 @@
 
 ## API Used
 
-This project uses **[JSONPlaceholder](https://jsonplaceholder.typicode.com/)** —
+This  project uses **[JSONPlaceholder](https://jsonplaceholder.typicode.com/)** —
 a free, fake REST API for testing and prototyping. It requires no API key.
 
 the app uses its `/posts` endpoint to represent courses (the standard approach for this API). 
