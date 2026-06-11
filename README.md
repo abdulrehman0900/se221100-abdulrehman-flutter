@@ -6,13 +6,13 @@
 
 ## Tools & Packages Used
 
-| Tool / Package         | Version  | Purpose                                              |
-| ---------------------- | -------- | ---------------------------------------------------- |
-| Flutter / Dart         | 3.41.x / 3.11.x | Framework and language                        |
-| `provider`             | ^6.1.5   | State management (`ChangeNotifier`)                  |
-| `shared_preferences`   | ^2.5.5   | Local persistence / offline cache                    |
-| `http`                 | ^1.6.0   | REST API calls (HTTP layer)                          |
-| `flutter_test`         | SDK      | Unit & widget tests                                  |
+| Tool / Package         | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| Flutter / Dart         | Framework and language                        |
+| `provider`             | State management (`ChangeNotifier`)                  |
+| `shared_preferences`   | Local persistence / offline cache                    |
+| `http`                 | REST API calls (HTTP layer)                          |
+| `flutter_test`         | Unit & widget tests                                  |
 
 **API:** [JSONPlaceholder](https://jsonplaceholder.typicode.com/) — a free, no-key
 fake REST API. The `/posts` endpoint represents courses: each post's `title` is
@@ -81,4 +81,11 @@ The repository follows a **network-first, cache-on-failure** strategy:
   error is surfaced — so the UI always stays responsive.
 - UI logic and business logic are fully separated: screens just watch the
   provider and forward intent.
+
+**ScreenShots**
+
+<img width="1919" height="1017" alt="Screenshot 2026-06-10 223025" src="https://github.com/user-attachments/assets/07f224b6-51bb-4f4e-b3b6-353aa42925c1" />
+<img width="1919" height="1018" alt="Screenshot 2026-06-10 223008" src="https://github.com/user-attachments/assets/3d043665-8c70-494e-82e5-eb07987b276c" />
+<img width="1919" height="1017" alt="Screenshot 2026-06-10 222922" src="https://github.com/user-attachments/assets/b7f27ae7-e98e-4baf-aa9f-0682590d902c" />
+<img width="1919" height="1019" alt="Screenshot 2026-06-10 222659" src="https://github.com/user-attachments/assets/5f5a1d98-331c-404f-96b0-df2296d000c5" />
 
