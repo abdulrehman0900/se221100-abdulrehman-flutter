@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -103,7 +102,10 @@ class CourseService {
       return await action();
     } on ApiException {
       rethrow;
-    } on SocketException {
+    } on http.ClientException {
+      // Transport-level failure: connection refused/closed, DNS error, or no
+      // network. On web, all browser network errors surface as ClientException;
+      // on mobile/desktop, http 1.x also delivers socket failures this way.
       throw ApiException('No internet connection. Please try again.');
     } on TimeoutException {
       throw ApiException('Request timed out. Please try again.');

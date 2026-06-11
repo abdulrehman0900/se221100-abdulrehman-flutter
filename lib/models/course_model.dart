@@ -31,6 +31,19 @@ class Course {
     };
   }
 
+  /// Maps the full course (including [id]) for local persistence.
+  ///
+  /// Unlike [toJson], this keeps the [id] so cached courses round-trip
+  /// cleanly through [Course.fromJson] when read back from local storage.
+  Map<String, dynamic> toCacheMap() {
+    return {
+      'id': id,
+      'title': title,
+      'body': description,
+      'userId': userId,
+    };
+  }
+
   /// Returns a copy with the given fields replaced.
   Course copyWith({int? id, String? title, String? description, int? userId}) {
     return Course(

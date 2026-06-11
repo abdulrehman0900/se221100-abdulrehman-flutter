@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/course_model.dart';
-import '../services/course_service.dart';
+import '../providers/course_provider.dart';
 
 
 class CourseFormScreen extends StatefulWidget {
@@ -17,7 +18,6 @@ class CourseFormScreen extends StatefulWidget {
 
 class _CourseFormScreenState extends State<CourseFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _service = CourseService();
 
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
@@ -37,7 +37,6 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _service.dispose();
     super.dispose();
   }
 
@@ -53,17 +52,19 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
       userId: widget.course?.userId ?? 1,
     );
 
-    try {
-      final Course saved = widget.isEditing
-          ? await _service.updateCourse(input)
-          : await _service.addCourse(input);
+    // The provider owns the API call, caching and (for edits) the optimistic
+    // update + rollback. It returns null on success or an error message.
+    final provider = context.read<CourseProvider>();
+    final String? error = widget.isEditing
+        ? await provider.updateCourse(input)
+        : await provider.addCourse(input);
 
-      if (!mounted) return;
-      Navigator.pop(context, saved);
-    } on ApiException catch (e) {
-      if (!mounted) return;
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.pop(context, true);
+    } else {
       setState(() => _submitting = false);
-      _showError(e.message);
+      _showError(error);
     }
   }
 

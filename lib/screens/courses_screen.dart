@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/course_model.dart';
-import '../services/course_service.dart';
+import '../providers/course_provider.dart';
+import '../utils/enums.dart';
 import 'course_form_screen.dart';
 
 /// Courses screen — the home of all CRUD operations.
 ///
-/// * READ:   fetches courses from the API with loading + error handling.
-/// * CREATE: opens the form, then inserts the returned course into the list.
-/// * UPDATE: opens the pre-filled form, then replaces the course in the list.
-/// * DELETE: confirms, calls the API, then removes the course from the list.
+/// This screen is intentionally "dumb": it only renders state and forwards
+/// user intent to [CourseProvider]. All data loading, caching, offline
+/// fallback and optimistic updates live in the provider/repository layers.
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
 
@@ -18,58 +19,32 @@ class CoursesScreen extends StatefulWidget {
 }
 
 class _CoursesScreenState extends State<CoursesScreen> {
-  final CourseService _service = CourseService();
-
-  bool _loading = true;
-  String? _error;
-  List<Course> _courses = [];
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadCourses();
+    // Kick off the first load after the first frame so notifyListeners()
+    // never fires during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<CourseProvider>().loadCourses();
+    });
   }
 
   @override
   void dispose() {
-    _service.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  // READ
-
-  Future<void> _loadCourses() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final courses = await _service.fetchCourses();
-      if (!mounted) return;
-      setState(() {
-        _courses = courses;
-        _loading = false;
-      });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _loading = false;
-      });
-    }
-  }
-
-  // CREATE 
+  // CREATE
 
   Future<void> _addCourse() async {
-    final created = await Navigator.push<Course>(
+    final added = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CourseFormScreen()),
     );
-
-    if (created != null) {
-      setState(() => _courses.insert(0, created));
+    if (added == true && mounted) {
       _toast("Course added successfully", const Color(0xFF22C55E));
     }
   }
@@ -77,20 +52,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
   // UPDATE
 
   Future<void> _editCourse(Course course) async {
-    final updated = await Navigator.push<Course>(
+    final updated = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => CourseFormScreen(course: course)),
     );
-
-    if (updated != null) {
-      final index = _courses.indexWhere((c) => c.id == updated.id);
-      setState(() {
-        if (index != -1) {
-          _courses[index] = updated;
-        } else {
-          _courses.insert(0, updated);
-        }
-      });
+    if (updated == true && mounted) {
       _toast("Course updated successfully", const Color(0xFF22C55E));
     }
   }
@@ -146,14 +112,14 @@ class _CoursesScreenState extends State<CoursesScreen> {
   }
 
   Future<void> _deleteCourse(Course course) async {
-    try {
-      await _service.deleteCourse(course.id);
-      if (!mounted) return;
-      setState(() => _courses.removeWhere((c) => c.id == course.id));
+    // Optimistic: the provider removes the row immediately and only tells us
+    // here if the API rejected it (in which case it has already rolled back).
+    final error = await context.read<CourseProvider>().deleteCourse(course);
+    if (!mounted) return;
+    if (error == null) {
       _toast("Course deleted", const Color(0xFF22C55E));
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      _toast(e.message, const Color(0xFFEF4444));
+    } else {
+      _toast(error, const Color(0xFFEF4444));
     }
   }
 
@@ -170,10 +136,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
     );
   }
 
-  // UI 
+  // UI
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<CourseProvider>();
+
     return Scaffold(
       backgroundColor: const Color(0xFF020617),
       appBar: AppBar(
@@ -205,10 +173,10 @@ class _CoursesScreenState extends State<CoursesScreen> {
         ),
         centerTitle: true,
         actions: [
-          if (!_loading && _error == null)
+          if (provider.state != ViewState.loading)
             IconButton(
               tooltip: "Refresh",
-              onPressed: _loadCourses,
+              onPressed: provider.refresh,
               icon: const Icon(Icons.refresh, color: Color(0xFF94A3B8)),
             ),
         ],
@@ -222,15 +190,21 @@ class _CoursesScreenState extends State<CoursesScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ),
-      body: SafeArea(child: _buildBody()),
+      body: SafeArea(child: _buildBody(provider)),
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) return _buildLoading();
-    if (_error != null) return _buildError();
-    if (_courses.isEmpty) return _buildEmpty();
-    return _buildList();
+  Widget _buildBody(CourseProvider provider) {
+    switch (provider.state) {
+      case ViewState.loading:
+        return _buildLoading();
+      case ViewState.error:
+        return _buildError(provider);
+      case ViewState.empty:
+        return _buildEmpty();
+      case ViewState.success:
+        return _buildContent(provider);
+    }
   }
 
   Widget _buildLoading() {
@@ -249,7 +223,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
     );
   }
 
-  Widget _buildError() {
+  Widget _buildError(CourseProvider provider) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -280,13 +254,13 @@ class _CoursesScreenState extends State<CoursesScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _error ?? "Unknown error",
+              provider.error ?? "Unknown error",
               textAlign: TextAlign.center,
               style: const TextStyle(color: Color(0xFF94A3B8), height: 1.5),
             ),
             const SizedBox(height: 22),
             OutlinedButton.icon(
-              onPressed: _loadCourses,
+              onPressed: provider.refresh,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF6366F1),
                 side: const BorderSide(color: Color(0xFF6366F1)),
@@ -333,18 +307,125 @@ class _CoursesScreenState extends State<CoursesScreen> {
     );
   }
 
-  Widget _buildList() {
-    return RefreshIndicator(
-      color: const Color(0xFF6366F1),
-      backgroundColor: const Color(0xFF0F172A),
-      onRefresh: _loadCourses,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-        itemCount: _courses.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _courseCard(_courses[i]),
+  Widget _buildContent(CourseProvider provider) {
+    final courses = provider.courses;
+
+    return Column(
+      children: [
+        if (provider.isOffline) _offlineBanner(),
+        _searchField(provider),
+        Expanded(
+          child: RefreshIndicator(
+            color: const Color(0xFF6366F1),
+            backgroundColor: const Color(0xFF0F172A),
+            onRefresh: provider.refresh,
+            child: courses.isEmpty
+                ? _buildNoResults()
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+                    itemCount: courses.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) => _courseCard(courses[i]),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _offlineBanner() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withAlpha(28),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF59E0B).withAlpha(90)),
       ),
+      child: const Row(
+        children: [
+          Icon(Icons.wifi_off, color: Color(0xFFF59E0B), size: 18),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "You're offline — showing saved courses.",
+              style: TextStyle(color: Color(0xFFFCD34D), fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchField(CourseProvider provider) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: TextField(
+        controller: _searchController,
+        onChanged: provider.search,
+        style: const TextStyle(color: Color(0xFFF8FAFC), fontSize: 14),
+        decoration: InputDecoration(
+          hintText: "Search courses...",
+          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+          prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B), size: 20),
+          suffixIcon: provider.query.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close, color: Color(0xFF64748B), size: 18),
+                  onPressed: () {
+                    _searchController.clear();
+                    provider.clearSearch();
+                  },
+                ),
+          isDense: true,
+          filled: true,
+          fillColor: const Color(0xFF0F172A),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF1E293B)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF1E293B)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoResults() {
+    // Scrollable so pull-to-refresh still works when there are no matches.
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        const SizedBox(height: 80),
+        const Icon(Icons.search_off, color: Color(0xFF475569), size: 52),
+        const SizedBox(height: 14),
+        const Center(
+          child: Text(
+            "No matching courses",
+            style: TextStyle(
+              color: Color(0xFFF8FAFC),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Center(
+          child: Text(
+            "Try a different search term.",
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+          ),
+        ),
+      ],
     );
   }
 

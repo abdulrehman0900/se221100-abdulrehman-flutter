@@ -1,50 +1,84 @@
 
-## API Used
-
-This  project uses **[JSONPlaceholder](https://jsonplaceholder.typicode.com/)** —
-a free, fake REST API for testing and prototyping. It requires no API key.
-
-the app uses its `/posts` endpoint to represent courses (the standard approach for this API). 
-Each post's `title` is shown as the **course title** and its `body` as the **description**.
-
-### Endpoints
-
-| Operation | Method   | Endpoint                                             |
-| --------- | -------- | ---------------------------------------------------- |
-| Read      | `GET`    | `https://jsonplaceholder.typicode.com/posts?_limit=5`|
-| Create    | `POST`   | `https://jsonplaceholder.typicode.com/posts`         |
-| Update    | `PUT`    | `https://jsonplaceholder.typicode.com/posts/{id}`    |
-| Delete    | `DELETE` | `https://jsonplaceholder.typicode.com/posts/{id}`    |
-
-
-
-## Reference / Documentation Followed
-
-- **JSONPlaceholder Guide** (request/response examples for GET, POST, PUT, DELETE):
-  https://jsonplaceholder.typicode.com/guide/
-- **JSONPlaceholder home / available routes:**
-  https://jsonplaceholder.typicode.com/
-- **Flutter `http` package** (used for all network calls):
-  https://pub.dev/packages/http
-- **Flutter Cookbook — Fetch data from the internet:**
-  https://docs.flutter.dev/cookbook/networking/fetch-data
-- **Flutter Cookbook — Send / update / delete data:**
-  https://docs.flutter.dev/cookbook/networking/send-data
-
 
 ## Branch Name
 
-**feature/course-api-integration**
+**feature/offline-cache-and-state-management**
 
-<img width="1919" height="1019" alt="Screenshot 2026-06-10 132241" src="https://github.com/user-attachments/assets/7090b417-6bf8-4221-86c2-a5dd3353902d" />
-<img width="1919" height="1016" alt="Screenshot 2026-06-10 132343" src="https://github.com/user-attachments/assets/320ebdb8-cf56-436e-a4a5-4dee1c7ef690" />
-<img width="1919" height="1015" alt="Screenshot 2026-06-10 132319" src="https://github.com/user-attachments/assets/dd8d6175-9649-4c42-b8c9-f2d5ce78a744" />
-<img width="1919" height="1019" alt="Screenshot 2026-06-10 132257" src="https://github.com/user-attachments/assets/8a5d5078-9121-4f25-8db4-62d6f0a6f1f4" />
-<img width="1919" height="1015" alt="Screenshot 2026-06-10 132639" src="https://github.com/user-attachments/assets/484ea8ac-66ef-42a1-972f-3b95d2f524ae" />
-<img width="1919" height="1017" alt="Screenshot 2026-06-10 132600" src="https://github.com/user-attachments/assets/5ef2326e-799c-4e85-b9b3-5a08c820087d" />
-<img width="1908" height="1018" alt="Screenshot 2026-06-10 132545" src="https://github.com/user-attachments/assets/beac2238-0922-4c7e-9ffc-b68d4a2f8d49" />
-<img width="1919" height="1017" alt="Screenshot 2026-06-10 132520" src="https://github.com/user-attachments/assets/01f76af1-5538-4bd6-9513-2f43c640f206" />
-<img width="1919" height="997" alt="Screenshot 2026-06-10 132506" src="https://github.com/user-attachments/assets/2d62462e-32ff-448d-88bf-0828f6545d6c" />
-<img width="1919" height="1017" alt="Screenshot 2026-06-10 132430" src="https://github.com/user-attachments/assets/cadacad5-b8f9-444a-9216-d6c616dd9def" />
-<img width="1918" height="1021" alt="Screenshot 2026-06-10 132356" src="https://github.com/user-attachments/assets/9000a717-84db-4e1a-8764-4c4b7d00e99f" />
+## Tools & Packages Used
+
+| Tool / Package         | Version  | Purpose                                              |
+| ---------------------- | -------- | ---------------------------------------------------- |
+| Flutter / Dart         | 3.41.x / 3.11.x | Framework and language                        |
+| `provider`             | ^6.1.5   | State management (`ChangeNotifier`)                  |
+| `shared_preferences`   | ^2.5.5   | Local persistence / offline cache                    |
+| `http`                 | ^1.6.0   | REST API calls (HTTP layer)                          |
+| `flutter_test`         | SDK      | Unit & widget tests                                  |
+
+**API:** [JSONPlaceholder](https://jsonplaceholder.typicode.com/) — a free, no-key
+fake REST API. The `/posts` endpoint represents courses: each post's `title` is
+the course title and its `body` is the description.
+
+| Operation | Method   | Endpoint                                              |
+| --------- | -------- | ----------------------------------------------------- |
+| Read      | `GET`    | `https://jsonplaceholder.typicode.com/posts?_limit=5` |
+| Create    | `POST`   | `https://jsonplaceholder.typicode.com/posts`          |
+| Update    | `PUT`    | `https://jsonplaceholder.typicode.com/posts/{id}`     |
+| Delete    | `DELETE` | `https://jsonplaceholder.typicode.com/posts/{id}`     |
+
+## Architecture
+
+The app follows a strict separation of concerns across four layers:
+
+```
+        UI (screens)
+            │  renders state · forwards user intent
+            ▼
+   State management  (CourseProvider — ChangeNotifier)
+            │  loading / success / error / empty · optimistic updates
+            ▼
+      Repository      (CourseRepository — chooses the data source)
+        ┌───┴────────────────────────┐
+        ▼                            ▼
+   API service               Local database
+ (CourseService)          (CourseLocalStore)
+   HTTP only             SharedPreferences cache
+```
+
+- **UI** only renders state and forwards user intent — it contains no business logic.
+- **CourseProvider** owns all UI state and the optimistic-update logic.
+- **CourseRepository** is the single source of truth; it decides whether data
+  comes from the network or the local cache.
+- **CourseService** for HTTP requests.
+- **CourseLocalStore** for read/write local storage.
+
+The UI and provider depend only on the repository — never on the service or
+storage directly — which keeps each layer modular, reusable, and testable.
+
+
+## Offline & State Management Approach
+
+### Offline support (SharedPreferences)
+
+Every successful API fetch is cached locally as JSON in **SharedPreferences**.
+The repository follows a **network-first, cache-on-failure** strategy:
+
+- On a successful fetch, fresh data is returned **and** written to the cache,
+  so the local copy stays synchronized with the server.
+- If the network is unavailable, the repository transparently serves the last
+  cached list, and the UI shows an **offline banner**.
+- Create / update / delete also re-sync the cache after they succeed, so the
+  offline copy never drifts from what the user sees.
+
+### State management (Provider)
+
+`setState`-driven data flow is replaced with a single `CourseProvider`
+(`ChangeNotifier`):
+
+- A `ViewState` enum models **loading / success / error / empty** explicitly,
+  instead of juggling scattered boolean flags.
+- **Optimistic updates:** delete and update are applied to the in-memory list
+  immediately; if the API call fails, the change is **rolled back** and the
+  error is surfaced — so the UI always stays responsive.
+- UI logic and business logic are fully separated: screens just watch the
+  provider and forward intent.
 
